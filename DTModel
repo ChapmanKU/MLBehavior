@@ -1,0 +1,93 @@
+# Import Libraries
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import make_scorer, precision_score, classification_report, confusion_matrix, accuracy_score
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load Dataset
+data = pd.read_csv('c:\\workspace\\dataformodel.csv')  
+
+# Convert "Environmental_Importance" into binary labels
+data['Social_Equity'] = data['Social_Equity'].apply(lambda x: 'important' if x >= 4 else 'unimportant')
+
+# Features and target variable
+features = ['Q4', 'Q5', 'education', 'freetime', 'breakfast', 'shoes', 'sleep', 'hobbies', 'ecobag', 'outdoor', 'culture', 'ownership', 'energyexpense', 'RE_Support', 'FF_Support', 'policy_knowledge', 'AGE', 'SEX', 'pincome']
+
+# Drop rows with missing values in any of the specified features or target variable
+data.dropna(subset=features + ['Social_Equity'], inplace=True)
+
+# Set X and Y for intial training
+X = data[features]
+y = data['Social_Equity']
+
+# Perform Grid Search for Hyperparameter Tuning with precision as scoring metric
+param_grid = {
+    'max_depth': list(range(3, 16)),
+    'min_samples_split': list(range(2, 31)),
+    'min_samples_leaf': list(range(5, 51))
+}
+
+# Define the scoring metric as precision for the positive class ('important')
+scorer = make_scorer(precision_score, pos_label='important')
+
+# Initialize the decision tree classifier with class_weight='balanced'
+clf = DecisionTreeClassifier(random_state=42, class_weight='balanced')
+
+# Perform grid search with 5-fold cross-validation
+grid_search = GridSearchCV(estimator=clf, param_grid=param_grid, cv=5, scoring=scorer, n_jobs=-1)
+grid_search.fit(X, y)
+
+# Get the best parameters and model
+best_params = grid_search.best_params_
+best_clf = grid_search.best_estimator_
+
+# Print the best parameters
+print('Best Parameters:', best_params)
+
+# Display the most important features
+feature_importances = pd.DataFrame({'feature': features, 'importance': best_clf.feature_importances_})
+feature_importances = feature_importances.sort_values(by='importance', ascending=False)
+
+# Display the top 8 features
+top_features = feature_importances.head(8)['feature'].tolist()
+print('Top 8 Features:', top_features)
+
+# Use only the top x features
+X = data[top_features]
+y = data['Social_Equity']
+
+# Split Data into Training and Testing Sets using the top 8 features
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create and Train the Decision Tree Model with Specified Parameters using the top 10 features
+best_clf.fit(X_train, y_train)
+
+# Make Predictions and Evaluate the Model
+predictions = best_clf.predict(X_test)
+
+# Calculate precision for both classes
+precision_important = precision_score(y_test, predictions, pos_label='important')
+precision_unimportant = precision_score(y_test, predictions, pos_label='unimportant')
+
+# Print precision for both classes
+print('Precision for "important" class:', precision_important)
+print('Precision for "unimportant" class:', precision_unimportant)
+
+# Calculate accuracy
+accuracy = accuracy_score(y_test, predictions)
+print('Model Accuracy:', accuracy)
+
+# Generate a classification report
+print('Classification Report:')
+print(classification_report(y_test, predictions))
+
+# Calculate confusion matrix
+conf_matrix = confusion_matrix(y_test, predictions)
+print('Confusion Matrix:')
+print(conf_matrix)
+
+# Visualize the decision tree
+plt.figure(figsize=(120, 60))
+plot_tree(best_clf, feature_names=top_features, class_names=['important', 'unimportant'], filled=True, rounded=True, max_depth=10, fontsize=8)
+plt.show()
